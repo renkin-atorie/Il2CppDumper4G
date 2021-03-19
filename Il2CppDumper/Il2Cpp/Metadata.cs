@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Il2CppDumper
 {
@@ -39,6 +40,8 @@ namespace Il2CppDumper
         public ulong Address;
 
         private byte[] stringDecryptionBlob = null;
+        private Dictionary<string, string> nameTranslation = new Dictionary<string, string>();
+        private Regex nameTranslationMemberRegex = new Regex(@".+\/<(.+)>", RegexOptions.Compiled); // avoid a bunch of allocations
 
         public Metadata(Stream stream) : base(stream)
         {
@@ -56,7 +59,20 @@ namespace Il2CppDumper
             Version = 24;
             header = ReadClass<Il2CppGlobalMetadataHeader>(0);
 
-            stringDecryptionBlob = File.ReadAllBytes("D:\\genshinimpactre\\decryption_blob.bin");
+            stringDecryptionBlob = File.ReadAllBytes("D:\\genshinimpactre\\1.5-dev\\decryption_blob.bin");
+
+            var nameTranslationFile = File.ReadAllLines("D:\\genshinimpactre\\1.5-dev\\YuanShen_Data\\StreamingAssets\\nameTranslation.txt");
+            foreach (var line in nameTranslationFile)
+            {
+                if (line.StartsWith("#"))
+                    continue;
+                var split = line.Split('⇨');
+                if (split.Length != 2)
+                    throw new NotSupportedException($"unexpected split.Length {split.Length}");
+                //Console.WriteLine("{0} {1}", split[0], split[1]);
+                nameTranslation.Add(split[0], split[1]);
+            }
+            Console.WriteLine($"Loaded {nameTranslation.Count} lookup values");
 
             /*if (version == 24)
             {
@@ -93,7 +109,7 @@ namespace Il2CppDumper
             vtableMethods = ReadClassArray<uint>(header.vtableMethodsOffset, header.vtableMethodsCount / 4);
             if (Version > 16 && Version < 27) //TODO
             {
-                stringLiterals = ReadMetadataClassArray<Il2CppStringLiteral>(0xC7F2C, (int)header.genericContainersOffset - 0xC7F2C); // see notes for how to get this
+                stringLiterals = ReadMetadataClassArray<Il2CppStringLiteral>(0x25611C, (int)header.genericContainersOffset - 0x25611C); // see notes for how to get this
                 metadataUsageLists = ReadMetadataClassArray<Il2CppMetadataUsageList>(header.metadataUsageListsOffset, header.metadataUsageListsCount);
                 metadataUsagePairs = ReadMetadataClassArray<Il2CppMetadataUsagePair>(header.metadataUsagePairsOffset, header.metadataUsagePairsCount);
 
@@ -152,7 +168,7 @@ namespace Il2CppDumper
             if (!stringCache.TryGetValue(index, out var result))
             {
                 //result = ReadStringToNull(header.stringOffset + index);
-                result = ReadStringToNull(0xBD494C + index);
+                result = LookupNameTranslation(ReadStringToNull(0xE63A28 + index));
                 stringCache.Add(index, result);
             }
             return result;
@@ -188,6 +204,7 @@ namespace Il2CppDumper
         {
             var stringLiteral = stringLiterals[index];
             Position = (ulong)(SizeOf(typeof(Il2CppGlobalMetadataHeader)) + stringLiteral.dataIndex);
+            //Position = (ulong)(0x158 + stringLiteral.dataIndex);
 
             var buffer = ReadBytes((int)stringLiteral.length);
             for (var i = 0; i < stringLiteral.length; i++)
@@ -288,6 +305,20 @@ namespace Il2CppDumper
             Position = start;
             ReadBytes(Encoding.UTF8.GetByteCount(str));
             return str;
+        }
+
+        public string LookupNameTranslation(string obfuscated)
+        {
+            string original;
+            if (nameTranslation.TryGetValue(obfuscated, out original))
+            {
+                // TODO: not exactly accurate
+                Match m = nameTranslationMemberRegex.Match(original);
+                if (m.Success)
+                    return m.Groups[1].Value;
+                return original.Replace('/', '.');
+            }
+            return obfuscated;
         }
     }
 }

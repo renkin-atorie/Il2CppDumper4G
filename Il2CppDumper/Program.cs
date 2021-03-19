@@ -61,8 +61,8 @@ namespace Il2CppDumper
             {
                 outputDir = AppDomain.CurrentDomain.BaseDirectory;
             }
-            il2cppPath = "F:\\Genshin Impact\\Genshin Impact Game\\YuanShen_Data\\Native\\UserAssembly.dll";
-            metadataPath = "C:\\Users\\Sanae\\Desktop\\global-metadata\\global-metadata.dat";
+            il2cppPath = "D:\\genshinimpactre\\1.5-dev\\UserAssembly.dll";
+            metadataPath = "D:\\genshinimpactre\\1.5-dev\\global-metadata-dumped.dat";
 #if NETFRAMEWORK
             if (il2cppPath == null)
             {
@@ -219,17 +219,17 @@ namespace Il2CppDumper
                     var metadataRegistration = Convert.ToUInt64(Console.ReadLine(), 16);*/
                     ProcessModuleCollection pms = Process.GetCurrentProcess().Modules;
                     ulong baseaddr = 0;
-                    foreach(ProcessModule pm in pms)
+                    foreach (ProcessModule pm in pms)
                     {
-                        if(pm.ModuleName == "UserAssembly.dll")
+                        if (pm.ModuleName == "UserAssembly.dll")
                         {
                             baseaddr = (ulong)pm.BaseAddress;
                             break;
                         }
                     }
                     Console.WriteLine("baseadr: 0x" + baseaddr.ToString("x2"));
-                    var codeRegistration = baseaddr + 0x72A0810;
-                    var metadataRegistration = baseaddr + 0x7FBF040;
+                    var codeRegistration = baseaddr + 0xCC371E0;
+                    var metadataRegistration = baseaddr + 0xF4EF330;
                     il2Cpp.Init(codeRegistration, metadataRegistration);
                     return true;
                 }
@@ -250,7 +250,7 @@ namespace Il2CppDumper
             var decompiler = new Il2CppDecompiler(executor);
             decompiler.Decompile(config, outputDir);
             Console.WriteLine("Done!");
-            if (false)
+            if (true)
             {
                 Console.WriteLine("Generate script...");
                 var scriptGenerator = new ScriptGenerator(executor);

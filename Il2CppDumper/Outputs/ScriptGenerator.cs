@@ -205,7 +205,7 @@ namespace Il2CppDumper
                 }
             }
             // 处理MetadataUsage
-            if (il2Cpp.Version > 16 && il2Cpp.Version < 27)
+            if (true)
             {
                 foreach (var i in metadata.metadataUsageDic[1]) //kIl2CppMetadataUsageTypeInfo
                 {
@@ -738,10 +738,10 @@ namespace Il2CppDumper
             {
                 var parentStructName = info.Parent + "_o";
                 pre.Append(RecursionStructInfo(structInfoWithStructName[parentStructName]));
-                sb.Append($"struct {info.TypeName}_Fields : {info.Parent}_Fields {{\n");
+                //sb.Append($"struct {info.TypeName}_Fields : {info.Parent}_Fields {{\n");
                 // C style
-                //sb.Append($"struct {info.TypeName}_Fields {{\n");
-                //sb.Append($"\t{info.Parent}_Fields _;\n");
+                sb.Append($"struct {info.TypeName}_Fields {{\n");
+                sb.Append($"\t{info.Parent}_Fields _;\n");
             }
             else
             {
