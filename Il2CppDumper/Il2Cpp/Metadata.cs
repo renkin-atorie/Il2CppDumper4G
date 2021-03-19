@@ -313,10 +313,15 @@ namespace Il2CppDumper
             if (nameTranslation.TryGetValue(obfuscated, out original))
             {
                 // TODO: not exactly accurate
+                // unfortunately i can't use [^1] on this version of c#
                 Match m = nameTranslationMemberRegex.Match(original);
                 if (m.Success)
-                    return m.Groups[1].Value;
-                return original.Replace('/', '.');
+                {
+                    var split = m.Groups[1].Value.Split('/');
+                    return split[split.Length - 1];
+                }
+                var split2 = original.Split('/');
+                return split2[split2.Length - 1];
             }
             return obfuscated;
         }
