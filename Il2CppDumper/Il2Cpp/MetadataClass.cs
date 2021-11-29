@@ -109,10 +109,10 @@ namespace Il2CppDumper
         public uint padding2;
         public uint padding3; //0x10
         public uint padding4;
-        public uint padding5;
-        public uint padding6;
-        public uint padding7; //0x20
-        public uint padding8;
+        public uint stringLiteralDataOffset;
+        public int stringLiteralDataCount;
+        public uint stringLiteralOffset; //0x20
+        public int stringLiteralCount;
 
         public uint genericContainersOffset; // 0x28
         public int genericContainersCount;
@@ -166,8 +166,8 @@ namespace Il2CppDumper
         public uint padding30;
         public uint padding31;  //0xd0
         public uint padding32;
-        public uint padding33;
-        public uint padding34;
+        public uint stringOffset;
+        public int stringCount;
 
         public uint parametersOffset; // 0xe0
         public int parametersCount;

@@ -8,6 +8,8 @@ namespace Il2CppDumper
 {
     public sealed class PE : Il2Cpp
     {
+        public SectionHeader[] Sections => sections;
+
         private SectionHeader[] sections;
         private ulong imageBase;
 

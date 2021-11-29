@@ -20,6 +20,7 @@ namespace Il2CppDumper
             config = JsonConvert.DeserializeObject<Config>(File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + @"config.json"));
             string il2cppPath = null;
             string metadataPath = null;
+            string nameTranslationPath = null;
             string outputDir = null;
 
             if (args.Length == 1)
@@ -61,13 +62,11 @@ namespace Il2CppDumper
             {
                 outputDir = AppDomain.CurrentDomain.BaseDirectory;
             }
-            il2cppPath = "D:\\genshinimpactre\\1.5-dev\\UserAssembly.dll";
-            metadataPath = "D:\\genshinimpactre\\1.5-dev\\global-metadata-dumped.dat";
 #if NETFRAMEWORK
             if (il2cppPath == null)
             {
                 var ofd = new OpenFileDialog();
-                ofd.Filter = "Il2Cpp binary file|*.*";
+                ofd.Filter = "UserAssembly|UserAssembly.dll";
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
                     il2cppPath = ofd.FileName;
@@ -75,6 +74,10 @@ namespace Il2CppDumper
                     if (ofd.ShowDialog() == DialogResult.OK)
                     {
                         metadataPath = ofd.FileName;
+                        ofd.Title = "Open nameTranslation.txt if you have one, otherwise just hit cancel";
+                        ofd.Filter = "BeeByte Obfuscator mappings|nameTranslation.txt";
+                        if (ofd.ShowDialog() == DialogResult.OK)
+                            nameTranslationPath = ofd.FileName;
                     }
                     else
                     {
@@ -94,7 +97,7 @@ namespace Il2CppDumper
             }
             try
             {
-                if (Init(il2cppPath, metadataPath, out var metadata, out var il2Cpp))
+                if (Init(il2cppPath, metadataPath, nameTranslationPath, out var metadata, out var il2Cpp))
                 {
                     Dump(metadata, il2Cpp, outputDir);
                 }
@@ -115,11 +118,14 @@ namespace Il2CppDumper
             Console.WriteLine($"usage: {AppDomain.CurrentDomain.FriendlyName} <executable-file> <global-metadata> <output-directory>");
         }
 
-        private static bool Init(string il2cppPath, string metadataPath, out Metadata metadata, out Il2Cpp il2Cpp)
+        private static bool Init(string il2cppPath, string metadataPath, string nameTranslationPath, out Metadata metadata, out Il2Cpp il2Cpp)
         {
             Console.WriteLine("Initializing metadata...");
             var metadataBytes = File.ReadAllBytes(metadataPath);
-            metadata = new Metadata(new MemoryStream(metadataBytes));
+
+            var stringDecryptionInfo = MetadataDecryption.DecryptMetadata(metadataBytes);
+
+            metadata = new Metadata(new MemoryStream(metadataBytes), stringDecryptionInfo, nameTranslationPath);
             Console.WriteLine($"Metadata Version: {metadata.Version}");
 
             Console.WriteLine("Initializing il2cpp file...");
@@ -219,17 +225,64 @@ namespace Il2CppDumper
                     var metadataRegistration = Convert.ToUInt64(Console.ReadLine(), 16);*/
                     ProcessModuleCollection pms = Process.GetCurrentProcess().Modules;
                     ulong baseaddr = 0;
+                    ProcessModule targetModule = null;
                     foreach (ProcessModule pm in pms)
                     {
                         if (pm.ModuleName == "UserAssembly.dll")
                         {
                             baseaddr = (ulong)pm.BaseAddress;
+                            targetModule = pm;
                             break;
                         }
                     }
                     Console.WriteLine("baseadr: 0x" + baseaddr.ToString("x2"));
-                    var codeRegistration = baseaddr + 0xCC371E0;
-                    var metadataRegistration = baseaddr + 0xF4EF330;
+
+                    ulong codeRegistration = 0;
+                    ulong metadataRegistration = 0;
+
+                    // custom search
+                    // searching .text for the following pattern:
+                    // lea r8,  [rip+0x????????]
+                    // lea rdx, [rip+0x????????]
+                    // lea rcx, [rip+0x????????]
+                    // jmp [rip+0x????????]
+                    // or...
+                    // 4c 8d 05 ?? ?? ?? ??
+                    // 48 8d 15 ?? ?? ?? ??
+                    // 48 8d 0d ?? ?? ?? ??
+                    // e9
+                    // 22 bytes long
+
+                    // .text is always the first section
+                    var text_start = ((PE)il2Cpp).Sections[0].VirtualAddress + baseaddr;
+                    var text_end = text_start + ((PE)il2Cpp).Sections[0].VirtualSize;
+
+                    // functions are always aligned to 16 bytes
+                    const int patternLength = 22;
+                    byte[] d = new byte[patternLength];
+                    for (ulong ptr = text_start; ptr < text_end - patternLength; ptr += 0x10)
+                    {
+                        Marshal.Copy((IntPtr)ptr, d, 0, patternLength);
+                        if (
+                            d[ 0] == 0x4C && d[ 1] == 0x8D && d[ 2] == 0x05 &&
+                            d[ 7] == 0x48 && d[ 8] == 0x8D && d[ 9] == 0x15 &&
+                            d[14] == 0x48 && d[15] == 0x8D && d[16] == 0x0D &&
+                            d[21] == 0xE9
+                        )
+                        {
+                            codeRegistration = ptr + 21 + BitConverter.ToUInt32(d, 14 + 3);
+                            metadataRegistration = ptr + 14 + BitConverter.ToUInt32(d, 7 + 3);
+                            Console.WriteLine($"Found the offsets! codeRegistration: 0x{(codeRegistration - baseaddr).ToString("X2")}, metadataRegistration: 0x{(metadataRegistration - baseaddr).ToString("X2")}");
+                            break;
+                        }
+                    }
+
+                    if (codeRegistration == 0 && metadataRegistration == 0)
+                    {
+                        Console.WriteLine("Failed to find CodeRegistration and MetadataRegistration, go yell at Khang");
+                        return false;
+                    }
+
                     il2Cpp.Init(codeRegistration, metadataRegistration);
                     return true;
                 }

@@ -43,7 +43,7 @@ namespace Il2CppDumper
         private Dictionary<string, string> nameTranslation = new Dictionary<string, string>();
         private Regex nameTranslationMemberRegex = new Regex(@".+\/<(.+)>", RegexOptions.Compiled); // avoid a bunch of allocations
 
-        public Metadata(Stream stream) : base(stream)
+        public Metadata(Stream stream, MetadataDecryption.StringDecryptionData decData, string nameTranslationPath) : base(stream)
         {
             /*var sanity = ReadUInt32();
             if (sanity != 0xFAB11BAF)
@@ -59,20 +59,29 @@ namespace Il2CppDumper
             Version = 24;
             header = ReadClass<Il2CppGlobalMetadataHeader>(0);
 
-            stringDecryptionBlob = File.ReadAllBytes("D:\\genshinimpactre\\1.5-dev\\decryption_blob.bin");
+            //stringDecryptionBlob = File.ReadAllBytes("D:\\genshinimpactre\\1.5-dev\\decryption_blob.bin");
+            stringDecryptionBlob = decData.stringDecryptionBlob;
+            header.stringCount ^= (int)decData.stringCountXor;
+            header.stringOffset ^= decData.stringOffsetXor;
+            header.stringLiteralOffset ^= decData.stringLiteralOffsetXor;
+            header.stringLiteralDataCount ^= (int)decData.stringLiteralDataCountXor;
+            header.stringLiteralDataOffset ^= decData.stringLiteralDataOffsetXor;
 
-            var nameTranslationFile = File.ReadAllLines("D:\\genshinimpactre\\1.5-dev\\YuanShen_Data\\StreamingAssets\\nameTranslation.txt");
-            foreach (var line in nameTranslationFile)
+            if (nameTranslationPath != null)
             {
-                if (line.StartsWith("#"))
-                    continue;
-                var split = line.Split('⇨');
-                if (split.Length != 2)
-                    throw new NotSupportedException($"unexpected split.Length {split.Length}");
-                //Console.WriteLine("{0} {1}", split[0], split[1]);
-                nameTranslation.Add(split[0], split[1]);
+                var nameTranslationFile = File.ReadAllLines(nameTranslationPath);
+                foreach (var line in nameTranslationFile)
+                {
+                    if (line.StartsWith("#"))
+                        continue;
+                    var split = line.Split('⇨');
+                    if (split.Length != 2)
+                        throw new NotSupportedException($"unexpected split.Length {split.Length}");
+                    //Console.WriteLine("{0} {1}", split[0], split[1]);
+                    nameTranslation.Add(split[0], split[1]);
+                }
+                Console.WriteLine($"Loaded {nameTranslation.Count} lookup values");
             }
-            Console.WriteLine($"Loaded {nameTranslation.Count} lookup values");
 
             /*if (version == 24)
             {
@@ -107,9 +116,9 @@ namespace Il2CppDumper
             genericParameters = ReadMetadataClassArray<Il2CppGenericParameter>(header.genericParametersOffset, header.genericParametersCount);
             constraintIndices = ReadClassArray<int>(header.genericParameterConstraintsOffset, header.genericParameterConstraintsCount / 4);
             vtableMethods = ReadClassArray<uint>(header.vtableMethodsOffset, header.vtableMethodsCount / 4);
+            stringLiterals = ReadMetadataClassArray<Il2CppStringLiteral>(header.stringLiteralOffset, header.stringLiteralCount);
             if (Version > 16 && Version < 27) //TODO
             {
-                stringLiterals = ReadMetadataClassArray<Il2CppStringLiteral>(0x25611C, (int)header.genericContainersOffset - 0x25611C); // see notes for how to get this
                 metadataUsageLists = ReadMetadataClassArray<Il2CppMetadataUsageList>(header.metadataUsageListsOffset, header.metadataUsageListsCount);
                 metadataUsagePairs = ReadMetadataClassArray<Il2CppMetadataUsagePair>(header.metadataUsagePairsOffset, header.metadataUsagePairsCount);
 
@@ -167,8 +176,7 @@ namespace Il2CppDumper
         {
             if (!stringCache.TryGetValue(index, out var result))
             {
-                //result = ReadStringToNull(header.stringOffset + index);
-                result = LookupNameTranslation(ReadStringToNull(0xE63A28 + index));
+                result = ReadStringToNull(header.stringOffset + index);
                 stringCache.Add(index, result);
             }
             return result;
