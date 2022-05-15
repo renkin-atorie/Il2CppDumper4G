@@ -176,7 +176,7 @@ namespace Il2CppDumper
         {
             if (!stringCache.TryGetValue(index, out var result))
             {
-                result = ReadStringToNull(header.stringOffset + index);
+                result = LookupNameTranslation(ReadStringToNull(header.stringOffset + index));
                 stringCache.Add(index, result);
             }
             return result;
